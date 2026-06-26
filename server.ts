@@ -246,7 +246,7 @@ app.use((req, res, next) => {
     if (clientSites && Array.isArray(clientSites) && clientSites.length > 0) {
       sites = clientSites;
     }
-    if (clientConfig && typeof clientConfig === 'object') {
+    if (clientConfig && typeof clientConfig === 'object' && !Array.isArray(clientConfig)) {
       const mergedConfig = { ...integrationConfig };
       for (const key of Object.keys(clientConfig)) {
         const val = clientConfig[key];
@@ -468,10 +468,12 @@ async function sendToSpreadsheet(payload: any) {
 }
 
 // Keep ESP32 status online tracker (mock watchdog)
-setInterval(() => {
-  const now = Date.now();
-  checkSirenAutoReset();
-}, 5000);
+if (!process.env.VERCEL && !process.env.NOW_BUILDER && !process.env.LAMBDA_TASK_ROOT && !process.env.AWS_EXECUTION_ENV) {
+  setInterval(() => {
+    const now = Date.now();
+    checkSirenAutoReset();
+  }, 5000);
+}
 
 
 // ==========================================
@@ -1168,8 +1170,9 @@ app.post('/api/test-whatsapp', async (req, res) => {
 export default app;
 
 async function startServer() {
-  if (process.env.VERCEL) {
-    // Skip listener and static file serving on Vercel
+  const isServerless = process.env.VERCEL || process.env.NOW_BUILDER || process.env.LAMBDA_TASK_ROOT || process.env.AWS_EXECUTION_ENV;
+  if (isServerless) {
+    // Skip listener and static file serving on Vercel/serverless
     // Static files are handled natively by Vercel CDN using vercel.json rewrites
     return;
   }
