@@ -176,7 +176,9 @@ export default function App() {
         body: JSON.stringify({
           siteId,
           action,
-          username: currentUser?.displayName || 'Admin'
+          username: currentUser?.displayName || 'Admin',
+          sites,
+          integrationConfig
         })
       });
       if (res.ok) {
@@ -200,7 +202,10 @@ export default function App() {
           siteId,
           groundingState: grounding,
           doorState: door,
-          username: currentUser?.displayName || 'Admin'
+          username: currentUser?.displayName || 'Admin',
+          sites,
+          integrationConfig,
+          alarmLogs
         })
       });
       if (res.ok) {
@@ -232,7 +237,11 @@ export default function App() {
       const res = await fetch('/api/reset-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: currentUser?.displayName || 'Admin' })
+        body: JSON.stringify({
+          username: currentUser?.displayName || 'Admin',
+          sites: updatedSites,
+          integrationConfig
+        })
       });
       if (res.ok) {
         await fetchSystemStatus(true);
@@ -255,7 +264,13 @@ export default function App() {
       const res = await fetch('/api/clear-logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: currentUser?.displayName || 'Admin' })
+        body: JSON.stringify({
+          username: currentUser?.displayName || 'Admin',
+          sites,
+          integrationConfig,
+          alarmLogs: [],
+          deviceLogs: []
+        })
       });
       if (res.ok) {
         await fetchSystemStatus(true);
@@ -278,7 +293,9 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           config: newConfig,
-          username: currentUser?.displayName || 'Admin'
+          username: currentUser?.displayName || 'Admin',
+          sites,
+          integrationConfig: newConfig
         })
       });
       if (res.ok) {
@@ -314,6 +331,9 @@ export default function App() {
         acPower: siteData.acPower || 'NORMAL',
         temperature: Number(siteData.temperature) || 28
       };
+      // To ensure stateless server starts from our currently loaded list of sites,
+      // we pass our existing sites array, and then let the API push the newSite to it.
+      const previousSites = [...sites];
       const updatedSites = [...sites, newSite];
       setSites(updatedSites);
       localStorage.setItem('tbig_sites', JSON.stringify(updatedSites));
@@ -323,7 +343,12 @@ export default function App() {
       const res = await fetch('/api/sites', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...siteData, username: currentUser?.displayName || 'Admin' })
+        body: JSON.stringify({ 
+          ...siteData, 
+          username: currentUser?.displayName || 'Admin',
+          sites: previousSites,
+          integrationConfig
+        })
       });
       if (res.ok) {
         await fetchSystemStatus(true);
@@ -354,6 +379,9 @@ export default function App() {
         }
         return s;
       });
+      // To ensure stateless server starts from our currently loaded list of sites,
+      // we pass our existing sites array, then let the API perform the update in-place.
+      const previousSites = [...sites];
       setSites(updatedSites);
       localStorage.setItem('tbig_sites', JSON.stringify(updatedSites));
       const nowTs = Date.now();
@@ -362,7 +390,12 @@ export default function App() {
       const res = await fetch(`/api/sites/${siteId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...siteData, username: currentUser?.displayName || 'Admin' })
+        body: JSON.stringify({ 
+          ...siteData, 
+          username: currentUser?.displayName || 'Admin',
+          sites: previousSites,
+          integrationConfig
+        })
       });
       if (res.ok) {
         await fetchSystemStatus(true);
@@ -381,6 +414,7 @@ export default function App() {
   const handleDeleteSite = async (siteId: string) => {
     try {
       const updatedSites = sites.filter(s => s.siteId.toUpperCase() !== siteId.toUpperCase());
+      const previousSites = [...sites];
       setSites(updatedSites);
       localStorage.setItem('tbig_sites', JSON.stringify(updatedSites));
       const nowTs = Date.now();
@@ -389,7 +423,11 @@ export default function App() {
       const res = await fetch(`/api/sites/${siteId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: currentUser?.displayName || 'Admin' })
+        body: JSON.stringify({ 
+          username: currentUser?.displayName || 'Admin',
+          sites: previousSites,
+          integrationConfig
+        })
       });
       if (res.ok) {
         await fetchSystemStatus(true);
