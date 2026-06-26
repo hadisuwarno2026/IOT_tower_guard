@@ -5,8 +5,7 @@
 
 import express from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
-import { Site, AlarmLog, AuditTrail, IntegrationConfig, DeviceStatusLog } from './src/types.ts';
+import { Site, AlarmLog, AuditTrail, IntegrationConfig, DeviceStatusLog } from './src/types';
 
 const app = express();
 const PORT = 3000;
@@ -1088,6 +1087,7 @@ export default app;
 
 async function startServer() {
   if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
