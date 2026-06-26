@@ -468,7 +468,7 @@ setInterval(() => {
 // ==========================================
 
 // Add a new tower
-app.post('/api/sites', (req, res) => {
+app.post('/api/sites', async (req, res) => {
   const { siteId, siteName, location, latitude, longitude, rectifier, battery, acPower, temperature, username } = req.body;
   if (!siteId || !siteName) {
     return res.status(400).json({ error: 'siteId and siteName are required' });
@@ -503,7 +503,7 @@ app.post('/api/sites', (req, res) => {
   createAuditLog(username || 'Admin', 'ADD SITE', `Menambahkan BTS baru: ${newSite.siteId} - ${newSite.siteName}`);
 
   // Send to Google Sheets SITE sheet
-  sendToSpreadsheet({
+  await sendToSpreadsheet({
     action: 'CRUD_SITE',
     method: 'POST',
     site: {
@@ -519,7 +519,7 @@ app.post('/api/sites', (req, res) => {
 });
 
 // Update an existing tower
-app.put('/api/sites/:siteId', (req, res) => {
+app.put('/api/sites/:siteId', async (req, res) => {
   const { siteId } = req.params;
   const { siteName, location, latitude, longitude, rectifier, battery, acPower, temperature, status, gsm, rssi, username } = req.body;
 
@@ -544,7 +544,7 @@ app.put('/api/sites/:siteId', (req, res) => {
   createAuditLog(username || 'Admin', 'UPDATE SITE', `Memperbarui data BTS: ${site.siteId} - ${site.siteName}`);
 
   // Send to Google Sheets SITE sheet
-  sendToSpreadsheet({
+  await sendToSpreadsheet({
     action: 'CRUD_SITE',
     method: 'PUT',
     site: {
@@ -560,7 +560,7 @@ app.put('/api/sites/:siteId', (req, res) => {
 });
 
 // Delete a tower
-app.delete('/api/sites/:siteId', (req, res) => {
+app.delete('/api/sites/:siteId', async (req, res) => {
   const { siteId } = req.params;
   const { username } = req.body;
 
@@ -576,7 +576,7 @@ app.delete('/api/sites/:siteId', (req, res) => {
   createAuditLog(username || 'Admin', 'DELETE SITE', `Menghapus BTS: ${removedSite.siteId} - ${removedSite.siteName}`);
 
   // Send to Google Sheets SITE sheet
-  sendToSpreadsheet({
+  await sendToSpreadsheet({
     action: 'CRUD_SITE',
     method: 'DELETE',
     site: {
@@ -643,7 +643,7 @@ app.post('/api/restore-state', (req, res) => {
 });
 
 // ESP32 POST Telemetry Endpoint (Real working endpoint!)
-app.post('/api/esp32', (req, res) => {
+app.post('/api/esp32', async (req, res) => {
   const { site_id, grounding, door, sirene, gsm, rssi, site_name } = req.body;
 
   if (!site_id) {
@@ -778,7 +778,7 @@ app.post('/api/esp32', (req, res) => {
 
   // Send status update to Google Sheets if it didn't originate from GAS/simulation to prevent infinite loop
   if (req.body.source !== 'server_simulation') {
-    sendToSpreadsheet({
+    await sendToSpreadsheet({
       site_id: site!.siteId,
       site_name: site!.siteName,
       grounding: site!.grounding,
@@ -883,7 +883,7 @@ app.post('/api/mute', (req, res) => {
 });
 
 // POST Test Alarm Injector (Forces alarming state on a site for easy prototyping/demonstration)
-app.post('/api/test-alarm', (req, res) => {
+app.post('/api/test-alarm', async (req, res) => {
   const { siteId, groundingState, doorState, username } = req.body;
   const site = sites.find(s => s.siteId.toUpperCase() === siteId.toUpperCase());
 
@@ -968,7 +968,7 @@ app.post('/api/test-alarm', (req, res) => {
   });
 
   // Synchronize simulated status and alarms to Google Sheets
-  sendToSpreadsheet({
+  await sendToSpreadsheet({
     site_id: site.siteId,
     site_name: site.siteName,
     grounding: site.grounding,
@@ -1005,10 +1005,10 @@ app.post('/api/config', (req, res) => {
 });
 
 // POST Reset All Sites to normal state
-app.post('/api/reset-all', (req, res) => {
+app.post('/api/reset-all', async (req, res) => {
   const { username } = req.body;
   
-  sites.forEach(site => {
+  const promises = sites.map(async (site) => {
     site.grounding = 'NORMAL';
     site.door = 'TERTUTUP';
     site.sirene = 'OFF';
@@ -1016,7 +1016,7 @@ app.post('/api/reset-all', (req, res) => {
     site.lastSeen = new Date().toISOString();
 
     // Synchronize to spreadsheet
-    sendToSpreadsheet({
+    await sendToSpreadsheet({
       site_id: site.siteId,
       site_name: site.siteName,
       grounding: 'NORMAL',
@@ -1030,6 +1030,8 @@ app.post('/api/reset-all', (req, res) => {
       keterangan: 'Mereset status BTS kembali normal.'
     });
   });
+
+  await Promise.all(promises);
 
   // Close all active alarms
   alarmLogs = alarmLogs.map(log => {
