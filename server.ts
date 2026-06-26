@@ -247,7 +247,14 @@ app.use((req, res, next) => {
       sites = clientSites;
     }
     if (clientConfig && typeof clientConfig === 'object') {
-      integrationConfig = { ...integrationConfig, ...clientConfig };
+      const mergedConfig = { ...integrationConfig };
+      for (const key of Object.keys(clientConfig)) {
+        const val = clientConfig[key];
+        if (val !== undefined && val !== null && val !== '') {
+          mergedConfig[key] = val;
+        }
+      }
+      integrationConfig = mergedConfig;
     }
     if (clientAlarms && Array.isArray(clientAlarms)) {
       alarmLogs = clientAlarms;
@@ -436,7 +443,11 @@ function triggerSimulatedWhatsApp(site: Site, type: 'NORMAL' | 'GROUNDING_PUTUS'
 
 // Helper to log telemetry & alarm data to Google Sheets
 async function sendToSpreadsheet(payload: any) {
-  if (!integrationConfig.gasUrl) return;
+  console.log(`[Spreadsheet] sendToSpreadsheet triggered. URL: "${integrationConfig.gasUrl}"`);
+  if (!integrationConfig.gasUrl) {
+    console.warn('[Spreadsheet] Skip send: gasUrl is empty.');
+    return;
+  }
   try {
     const response = await fetch(integrationConfig.gasUrl, {
       method: 'POST',
@@ -449,10 +460,10 @@ async function sendToSpreadsheet(payload: any) {
     if (!response.ok) {
       console.error(`Spreadsheet log error: ${response.statusText}`);
     } else {
-      console.log('Successfully logged to spreadsheet');
+      console.log('[Spreadsheet] Successfully logged to spreadsheet');
     }
   } catch (error) {
-    console.error('Spreadsheet log failed:', error);
+    console.error('[Spreadsheet] Spreadsheet log failed:', error);
   }
 }
 
@@ -506,9 +517,18 @@ app.post('/api/sites', async (req, res) => {
   await sendToSpreadsheet({
     action: 'CRUD_SITE',
     method: 'POST',
+    siteId: newSite.siteId,
+    site_id: newSite.siteId,
+    siteName: newSite.siteName,
+    site_name: newSite.siteName,
+    location: newSite.location,
+    latitude: newSite.latitude,
+    longitude: newSite.longitude,
     site: {
       siteId: newSite.siteId,
+      site_id: newSite.siteId,
       siteName: newSite.siteName,
+      site_name: newSite.siteName,
       location: newSite.location,
       latitude: newSite.latitude,
       longitude: newSite.longitude
@@ -547,9 +567,18 @@ app.put('/api/sites/:siteId', async (req, res) => {
   await sendToSpreadsheet({
     action: 'CRUD_SITE',
     method: 'PUT',
+    siteId: site.siteId,
+    site_id: site.siteId,
+    siteName: site.siteName,
+    site_name: site.siteName,
+    location: site.location,
+    latitude: site.latitude,
+    longitude: site.longitude,
     site: {
       siteId: site.siteId,
+      site_id: site.siteId,
       siteName: site.siteName,
+      site_name: site.siteName,
       location: site.location,
       latitude: site.latitude,
       longitude: site.longitude
@@ -579,8 +608,11 @@ app.delete('/api/sites/:siteId', async (req, res) => {
   await sendToSpreadsheet({
     action: 'CRUD_SITE',
     method: 'DELETE',
+    siteId: removedSite.siteId,
+    site_id: removedSite.siteId,
     site: {
-      siteId: removedSite.siteId
+      siteId: removedSite.siteId,
+      site_id: removedSite.siteId
     }
   });
 
@@ -639,6 +671,20 @@ app.post('/api/restore-state', (req, res) => {
     deviceLogs,
     auditTrails,
     lastUpdateTs
+  });
+});
+
+// ESP32 GET Telemetry Endpoint (Friendly browser view helper)
+app.get('/api/esp32', (req, res) => {
+  res.json({ 
+    message: 'ESP32 Telemetry endpoint is active. Please send HTTP POST requests with site_id.',
+    example_payload: {
+      site_id: 'BTS-001',
+      grounding: 'PUTUS',
+      door: 'TERBUKA',
+      gsm: '4G',
+      rssi: -72
+    }
   });
 });
 
@@ -779,7 +825,9 @@ app.post('/api/esp32', async (req, res) => {
   // Send status update to Google Sheets if it didn't originate from GAS/simulation to prevent infinite loop
   if (req.body.source !== 'server_simulation') {
     await sendToSpreadsheet({
+      siteId: site!.siteId,
       site_id: site!.siteId,
+      siteName: site!.siteName,
       site_name: site!.siteName,
       grounding: site!.grounding,
       door: site!.door,
@@ -969,7 +1017,9 @@ app.post('/api/test-alarm', async (req, res) => {
 
   // Synchronize simulated status and alarms to Google Sheets
   await sendToSpreadsheet({
+    siteId: site.siteId,
     site_id: site.siteId,
+    siteName: site.siteName,
     site_name: site.siteName,
     grounding: site.grounding,
     door: site.door,
@@ -1017,7 +1067,9 @@ app.post('/api/reset-all', async (req, res) => {
 
     // Synchronize to spreadsheet
     await sendToSpreadsheet({
+      siteId: site.siteId,
       site_id: site.siteId,
+      siteName: site.siteName,
       site_name: site.siteName,
       grounding: 'NORMAL',
       door: 'TERTUTUP',
