@@ -234,6 +234,34 @@ let auditTrails: AuditTrail[] = [
   }
 ];
 
+// Middleware to transparently synchronize state from client in serverless/stateless environments (e.g. Vercel)
+app.use((req, res, next) => {
+  if (req.body) {
+    const clientSites = req.body.clientSites || req.body.sites;
+    const clientConfig = req.body.clientConfig || req.body.integrationConfig;
+    const clientAlarms = req.body.clientAlarms || req.body.alarmLogs;
+    const clientDeviceLogs = req.body.clientDeviceLogs || req.body.deviceLogs;
+    const clientAudit = req.body.clientAudit || req.body.auditTrails;
+
+    if (clientSites && Array.isArray(clientSites) && clientSites.length > 0) {
+      sites = clientSites;
+    }
+    if (clientConfig && typeof clientConfig === 'object') {
+      integrationConfig = { ...integrationConfig, ...clientConfig };
+    }
+    if (clientAlarms && Array.isArray(clientAlarms)) {
+      alarmLogs = clientAlarms;
+    }
+    if (clientDeviceLogs && Array.isArray(clientDeviceLogs)) {
+      deviceLogs = clientDeviceLogs;
+    }
+    if (clientAudit && Array.isArray(clientAudit)) {
+      auditTrails = clientAudit;
+    }
+  }
+  next();
+});
+
 // Map of sirene muted status: key is siteId, value is boolean (true if muted)
 const mutedSirens: { [siteId: string]: boolean } = {};
 
@@ -773,7 +801,7 @@ app.post('/api/esp32', (req, res) => {
 // POST Manual Mute or ON Sirene for specific site (Client button click)
 app.post('/api/mute', (req, res) => {
   const { siteId, action, username } = req.body;
-  const site = sites.find(s => s.siteId === siteId);
+  const site = sites.find(s => s.siteId.toUpperCase() === siteId.toUpperCase());
 
   if (!site) {
     return res.status(404).json({ error: 'Site not found' });
@@ -857,7 +885,7 @@ app.post('/api/mute', (req, res) => {
 // POST Test Alarm Injector (Forces alarming state on a site for easy prototyping/demonstration)
 app.post('/api/test-alarm', (req, res) => {
   const { siteId, groundingState, doorState, username } = req.body;
-  const site = sites.find(s => s.siteId === siteId);
+  const site = sites.find(s => s.siteId.toUpperCase() === siteId.toUpperCase());
 
   if (!site) {
     return res.status(404).json({ error: 'Site not found' });
@@ -1086,7 +1114,13 @@ app.post('/api/test-whatsapp', async (req, res) => {
 export default app;
 
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  if (process.env.VERCEL) {
+    // Skip listener and static file serving on Vercel
+    // Static files are handled natively by Vercel CDN using vercel.json rewrites
+    return;
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -1099,11 +1133,6 @@ async function startServer() {
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
-  }
-
-  if (process.env.VERCEL) {
-    // Skip listener on Vercel (handled natively by Serverless Function exporter)
-    return;
   }
 
   app.listen(PORT, '0.0.0.0', () => {
